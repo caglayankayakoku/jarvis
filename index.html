@@ -131,12 +131,13 @@ async function ask(text){
   if(!key){$('keybox').classList.add('on');pending=text;return}
   add(text,true);state('thinking','DÜŞÜNÜYOR');
   try{
-    const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','X-Jarvis-Key':key},body:JSON.stringify({chatInput:text,sessionId:sid})});
+    const ac=new AbortController();const to=setTimeout(()=>ac.abort(),60000);
+    const r=await fetch(API,{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','X-Jarvis-Key':key},body:JSON.stringify({chatInput:text,sessionId:sid})});clearTimeout(to);
     if(r.status===401||r.status===403){key=null;store.set('jarvis-key','');add('Şifre hatalı görünüyor, tekrar gir.');$('keybox').classList.add('on');return state()}
     const j=await r.json().catch(()=>({}));
-    const out=(Array.isArray(j)?j[0]:j)?.output||'Bir sorun oldu, cevap alamadım.';
+    const out=(r.ok&&(Array.isArray(j)?j[0]:j)?.output)||'Beynim şu an yanıt veremedi, birazdan tekrar dener misin?';
     add(out);speak(out);
-  }catch(e){add('Bağlantı kurulamadı. İnternetini kontrol et.');state()}
+  }catch(e){const m=e.name==='AbortError'?'Beynim şu an çok yoğun, cevap gecikti. Birazdan tekrar sorar mısın?':'Bağlantı kurulamadı. İnternetini kontrol et.';add(m);speak(m)}
 }
 let pending=null;
 $('keybtn').onclick=()=>{const v=$('keyin').value.trim();if(!v)return;key=v;store.set('jarvis-key',v);$('keybox').classList.remove('on');if(pending){const p=pending;pending=null;ask(p)}};
