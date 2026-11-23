@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Jarvis</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--c:#2ea8ff;--c2:#7fd4ff;--dim:#0b3a5c;--bg:#000;--txt:#cfe9ff;--warn:#ff8a3d}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--txt);font-family:Rajdhani,system-ui,sans-serif;overflow:hidden}
+body{display:flex;flex-direction:column;padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom)}
+.top{display:flex;justify-content:space-between;align-items:flex-start;padding-top:12px;gap:8px}
+.stat{font-family:Orbitron;font-size:10px;letter-spacing:2px;color:var(--c2);opacity:.8}
+.stat b{display:block;font-size:22px;color:#fff;letter-spacing:1px}
+.date{text-align:right}
+.date .d{font-family:Orbitron;font-size:44px;line-height:1;color:#fff;font-weight:700}
+.date .m{background:var(--warn);color:#000;font-family:Orbitron;font-size:10px;letter-spacing:2px;padding:2px 6px;display:inline-block;margin-top:4px}
+.date .w{font-family:Orbitron;font-size:10px;letter-spacing:2px;color:var(--c2);margin-top:2px}
+.stage{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;position:relative}
+.reactor{position:relative;width:min(86vw,46vh,420px);aspect-ratio:1}
+.reactor svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.spin{transform-origin:50% 50%;animation:spin 40s linear infinite}
+.spin.r{animation-direction:reverse;animation-duration:26s}
+.spin.f{animation-duration:12s}
+@keyframes spin{to{transform:rotate(360deg)}}
+.glow{filter:drop-shadow(0 0 6px var(--c)) drop-shadow(0 0 18px rgba(46,168,255,.6))}
+.core{position:absolute;left:50%;top:50%;width:34%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;border:2px solid var(--c2);
+ background:radial-gradient(circle,#bfe8ff 0%,#2ea8ff 30%,#063a66 65%,#00111f 100%);box-shadow:0 0 30px var(--c),inset 0 0 30px #000;
+ display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .2s;border:none;color:#001a2e}
+.core:active{transform:translate(-50%,-50%) scale(.95)}
+.core svg{width:36%;height:36%;position:static}
+.reactor.listening .core{animation:pulse 1s ease-in-out infinite;background:radial-gradient(circle,#fff 0%,#7fd4ff 30%,#0a5a9a 65%,#00111f 100%)}
+.reactor.thinking .spin{animation-duration:3s}
+.reactor.speaking .core{animation:pulse .5s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 60px #7fd4ff,0 0 120px var(--c),inset 0 0 20px #000}}
+.status{position:absolute;bottom:-6px;left:0;right:0;text-align:center;font-family:Orbitron;font-size:11px;letter-spacing:4px;color:var(--c2)}
+.log{height:28vh;overflow-y:auto;border-top:1px solid var(--dim);padding:10px 2px;display:flex;flex-direction:column;gap:8px;font-size:17px;scrollbar-width:none}
+.log::-webkit-scrollbar{display:none}
+.msg{max-width:88%;padding:8px 12px;border:1px solid var(--dim);border-left:3px solid var(--c);background:rgba(11,58,92,.25);line-height:1.3}
+.msg.me{align-self:flex-end;border-left:1px solid var(--dim);border-right:3px solid var(--warn);background:rgba(255,138,61,.08)}
+.msg small{display:block;font-family:Orbitron;font-size:9px;letter-spacing:2px;color:var(--c2);opacity:.7;margin-bottom:2px}
+.bar{display:flex;gap:8px;padding:8px 0 12px}
+.bar input{flex:1;min-width:0;background:#020c14;border:1px solid var(--dim);color:#fff;padding:12px;font:inherit;font-size:16px;outline:none}
+.bar input:focus{border-color:var(--c)}
+.bar button{background:transparent;border:1px solid var(--c);color:var(--c2);font-family:Orbitron;font-size:11px;letter-spacing:2px;padding:0 14px;cursor:pointer}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:24px;z-index:5}
+.overlay.on{display:flex}
+.box{width:100%;max-width:360px;border:1px solid var(--c);padding:20px;box-shadow:0 0 30px rgba(46,168,255,.4)}
+.box h2{font-family:Orbitron;font-size:14px;letter-spacing:4px;color:var(--c2);margin-bottom:10px}
+.box p{font-size:15px;margin-bottom:14px;opacity:.85}
+.box input{width:100%;background:#020c14;border:1px solid var(--dim);color:#fff;padding:12px;font:inherit;font-size:16px;margin-bottom:12px;outline:none}
+.box button{width:100%;background:var(--c);border:none;color:#001a2e;font-family:Orbitron;font-weight:700;letter-spacing:3px;padding:12px;cursor:pointer}
+.side{position:absolute;font-family:Orbitron;font-size:9px;letter-spacing:2px;color:var(--c2);opacity:.55;line-height:1.9}
+.side.l{left:0;top:10%}.side.rr{right:0;bottom:10%;text-align:right}
+@media (min-width:800px){.side{font-size:11px}.log{height:24vh}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div>
+    <div class="stat">SİSTEM <b id="clock">--:--</b></div>
+    <div class="stat" style="margin-top:8px">ENERJİ <b id="batt">--%</b></div>
+  </div>
+  <div class="date"><div class="d" id="dd">--</div><div class="m" id="mm">----</div><div class="w" id="ww">----</div></div>
+</div>
+
+<div class="stage">
+  <div class="side l">GMAIL<br>TAKVİM<br>WIKIPEDIA<br>HESAP<br>HAFIZA</div>
+  <div class="side rr">ÇEVRİMİÇİ<br>TR-TR<br>SES: AÇIK<br>MOD: ASİSTAN</div>
+  <div class="reactor" id="reactor">
+    <svg viewBox="0 0 400 400" class="glow" aria-hidden="true">
+      <defs><radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="55%" stop-color="#2ea8ff" stop-opacity="0"/><stop offset="80%" stop-color="#2ea8ff" stop-opacity=".25"/><stop offset="100%" stop-color="#2ea8ff" stop-opacity="0"/></radialGradient></defs>
+      <circle cx="200" cy="200" r="198" fill="url(#g)"/>
+      <g class="spin"><circle cx="200" cy="200" r="190" fill="none" stroke="#2ea8ff" stroke-width="2" stroke-dasharray="60 14 6 14" opacity=".8"/></g>
+      <g class="spin r"><circle cx="200" cy="200" r="172" fill="none" stroke="#7fd4ff" stroke-width="14" stroke-dasharray="70 20" opacity=".55"/></g>
+      <circle cx="200" cy="200" r="156" fill="none" stroke="#0b3a5c" stroke-width="1"/>
+      <g class="spin f"><circle cx="200" cy="200" r="146" fill="none" stroke="#2ea8ff" stroke-width="3" stroke-dasharray="2 8"/></g>
+      <g class="spin r"><path d="M200 70 A130 130 0 0 1 330 200" fill="none" stroke="#7fd4ff" stroke-width="4"/><path d="M200 330 A130 130 0 0 1 70 200" fill="none" stroke="#7fd4ff" stroke-width="4"/></g>
+      <g class="spin"><circle cx="200" cy="200" r="112" fill="none" stroke="#2ea8ff" stroke-width="22" stroke-dasharray="40 9" opacity=".35"/></g>
+      <circle cx="200" cy="200" r="96" fill="none" stroke="#7fd4ff" stroke-width="1.5"/>
+    </svg>
+    <button class="core" id="mic" aria-label="Konuşmak için dokun">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg>
+    </button>
+    <div class="status" id="status">HAZIR</div>
+  </div>
+</div>
+
+<div class="log" id="log"></div>
+<form class="bar" id="form"><input id="txt" placeholder="Jarvis'e yaz..." autocomplete="off"><button>GÖNDER</button></form>
+
+<div class="overlay" id="keybox"><div class="box">
+  <h2>ERİŞİM</h2>
+  <p>Jarvis'in şifresini gir. Bu cihazda hatırlanır.</p>
+  <input id="keyin" type="password" placeholder="Jarvis şifresi" autocomplete="current-password">
+  <button id="keybtn">BAĞLAN</button>
+</div></div>
+
+<script>
+const API = 'https://kayakoku.app.n8n.cloud/webhook/382aae0880664a37';
+const $ = id => document.getElementById(id);
+const store = {get(k){try{return localStorage.getItem(k)}catch(e){return store.m[k]||null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){store.m[k]=v}},m:{}};
+let key = store.get('jarvis-key');
+let sid = store.get('jarvis-sid'); if(!sid){sid = 'app-' + Math.random().toString(36).slice(2) + Date.now().toString(36); store.set('jarvis-sid', sid)}
+const R = $('reactor');
+function state(s, label){R.className = 'reactor ' + (s||''); $('status').textContent = label || 'HAZIR'}
+
+// clock
+const AY=['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'],GUN=['PAZAR','PAZARTESİ','SALI','ÇARŞAMBA','PERŞEMBE','CUMA','CUMARTESİ'];
+function tick(){const d=new Date();$('clock').textContent=d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});$('dd').textContent=String(d.getDate()).padStart(2,'0');$('mm').textContent=AY[d.getMonth()];$('ww').textContent=GUN[d.getDay()]}
+tick();setInterval(tick,10000);
+if(navigator.getBattery)navigator.getBattery().then(b=>{const u=()=>$('batt').textContent=Math.round(b.level*100)+'%';u();b.onlevelchange=u}).catch(()=>{});
+
+function add(text, me){const m=document.createElement('div');m.className='msg'+(me?' me':'');const s=document.createElement('small');s.textContent=me?'SEN':'JARVIS';m.append(s,document.createTextNode(text));$('log').append(m);$('log').scrollTop=1e9}
+
+// speech out
+let voice=null;function pickVoice(){const v=speechSynthesis.getVoices();voice=v.find(x=>/^tr/i.test(x.lang))||null}
+if('speechSynthesis' in window){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}
+function speak(t){if(!('speechSynthesis' in window))return state();speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t.replace(/[*#_`>]/g,''));u.lang='tr-TR';if(voice)u.voice=voice;u.rate=1.05;u.onstart=()=>state('speaking','KONUŞUYOR');u.onend=u.onerror=()=>state();speechSynthesis.speak(u)}
+
+async function ask(text){
+  if(!text.trim())return;
+  if(!key){$('keybox').classList.add('on');pending=text;return}
+  add(text,true);state('thinking','DÜŞÜNÜYOR');
+  try{
+    const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','X-Jarvis-Key':key},body:JSON.stringify({chatInput:text,sessionId:sid})});
+    if(r.status===401||r.status===403){key=null;store.set('jarvis-key','');add('Şifre hatalı görünüyor, tekrar gir.');$('keybox').classList.add('on');return state()}
+    const j=await r.json().catch(()=>({}));
+    const out=(Array.isArray(j)?j[0]:j)?.output||'Bir sorun oldu, cevap alamadım.';
+    add(out);speak(out);
+  }catch(e){add('Bağlantı kurulamadı. İnternetini kontrol et.');state()}
+}
+let pending=null;
+$('keybtn').onclick=()=>{const v=$('keyin').value.trim();if(!v)return;key=v;store.set('jarvis-key',v);$('keybox').classList.remove('on');if(pending){const p=pending;pending=null;ask(p)}};
+$('keyin').onkeydown=e=>{if(e.key==='Enter')$('keybtn').click()};
+$('form').onsubmit=e=>{e.preventDefault();const t=$('txt').value;$('txt').value='';ask(t)};
+
+// speech in
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,listening=false;
+$('mic').onclick=()=>{
+  if('speechSynthesis' in window)speechSynthesis.cancel();
+  if(!SR){add('Bu tarayıcı sesli komutu desteklemiyor. Telefonda Chrome ile aç ya da yazarak konuş.');return}
+  if(listening){rec.stop();return}
+  rec=new SR();rec.lang='tr-TR';rec.interimResults=true;rec.maxAlternatives=1;let final='';
+  rec.onstart=()=>{listening=true;state('listening','DİNLİYOR')};
+  rec.onresult=e=>{let t='';for(const r of e.results)t+=r[0].transcript;final=t;$('status').textContent=t.slice(-28).toUpperCase()||'DİNLİYOR'};
+  rec.onerror=e=>{listening=false;state();if(e.error==='not-allowed')add('Mikrofon izni verilmedi. Tarayıcı ayarlarından bu siteye mikrofon izni ver.')};
+  rec.onend=()=>{listening=false;if(final.trim())ask(final);else state()};
+  rec.start();
+};
+if(!key)$('keybox').classList.add('on');
+add('Merhaba Çağlayan. Ortadaki halkaya dokun ve konuş.');
+</script>
+</body>
+</html>
