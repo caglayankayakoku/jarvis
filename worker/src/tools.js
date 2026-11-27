@@ -1,5 +1,6 @@
 // Jarvis'in araçları: Claude'a tanıtılan tanımlar ve onları çalıştıran kod.
 import { calendarList, calendarCreate, calendarDelete, calendarUpdate, gmailSearch, gmailRead, gmailSend } from "./google.js";
+import { placeSearch, reverseGeocode, nearby, route, mapLink } from "./maps.js";
 import { spotifyPlay, spotifyControl, spotifyNowPlaying } from "./spotify.js";
 
 const obj = (properties, required = []) => ({ type: "object", properties, required, additionalProperties: false });
@@ -114,6 +115,43 @@ export const TOOL_DEFS = [
     name: "zamanlayici",
     description: "Uygulamada geri sayım/alarm kurar; süre dolunca telefon sesli uyarır. 'Beş dakika sonra haber ver', 'yumurta için 7 dakika' gibi kısa süreler için kullan. Uygulama açık kalmalı; saatler sonrası için takvim_ekle hatırlatıcısını tercih et.",
     input_schema: obj({ saniye: { type: "number" }, etiket: { type: "string" } }, ["saniye"]),
+  },
+  {
+    name: "yer_ara",
+    description: "Bir yeri, adresi veya işletmeyi haritada arar; adres ve koordinat döndürür. Kullanıcının konumu biliniyorsa enlem/boylam ver, yakındakiler öne çıkar.",
+    input_schema: obj({ sorgu: { type: "string" }, enlem: { type: "number" }, boylam: { type: "number" } }, ["sorgu"]),
+  },
+  {
+    name: "neredeyim",
+    description: "Koordinatı adrese çevirir (mahalle, ilçe, il). 'Neredeyim?' sorusunda kullanıcının konumuyla çağır.",
+    input_schema: obj({ enlem: { type: "number" }, boylam: { type: "number" } }, ["enlem", "boylam"]),
+  },
+  {
+    name: "yakindakiler",
+    description: "Bir konumun yakınındaki yerleri en yakından uzağa listeler. Türler: eczane, hastane, benzinlik, kafe, restoran, atm, banka, otopark, market, cami, firin, polis, veteriner, sarj. Nöbetçi eczane bilgisi içermez; onun için web_search kullan.",
+    input_schema: obj(
+      { tur: { type: "string" }, enlem: { type: "number" }, boylam: { type: "number" }, yaricap_m: { type: "number" } },
+      ["tur", "enlem", "boylam"]
+    ),
+  },
+  {
+    name: "yol_suresi",
+    description: "İki nokta arası mesafe ve tahmini süre (trafiksiz). mod: arac, yuruyus, bisiklet. Adres verilirse önce yer_ara ile koordinat bul.",
+    input_schema: obj(
+      {
+        bas_enlem: { type: "number" }, bas_boylam: { type: "number" }, hedef_enlem: { type: "number" }, hedef_boylam: { type: "number" },
+        mod: { type: "string", enum: ["arac", "yuruyus", "bisiklet"] },
+      },
+      ["bas_enlem", "bas_boylam", "hedef_enlem", "hedef_boylam"]
+    ),
+  },
+  {
+    name: "harita_ac",
+    description: "Kullanıcının telefonunda Google Haritalar'ı açar. Bir yeri göstermek için sorgu (veya enlem/boylam), yol tarifi başlatmak için hedef (adres ya da 'enlem,boylam') ve mod (arac, yuruyus, bisiklet, toplu) ver.",
+    input_schema: obj({
+      sorgu: { type: "string" }, enlem: { type: "number" }, boylam: { type: "number" }, hedef: { type: "string" },
+      mod: { type: "string", enum: ["arac", "yuruyus", "bisiklet", "toplu"] },
+    }),
   },
   {
     name: "muzik_cal",
@@ -273,6 +311,19 @@ export async function runTool(env, name, input, ctx = { actions: [] }) {
       if (sn < 1 || sn > 24 * 3600) return { hata: "Süre 1 saniye ile 24 saat arasında olmalı" };
       ctx.actions.push({ tur: "zamanlayici", saniye: sn, etiket: input.etiket || "Süre doldu" });
       return { kuruldu: true, saniye: sn, not: "Uygulama açık kalmalı" };
+    }
+    case "yer_ara":
+      return placeSearch(input);
+    case "neredeyim":
+      return reverseGeocode(input);
+    case "yakindakiler":
+      return nearby(input);
+    case "yol_suresi":
+      return route(input);
+    case "harita_ac": {
+      const url = mapLink(input);
+      ctx.actions.push({ tur: "harita", url });
+      return { acildi: true };
     }
     case "mail_ara":
       return gmailSearch(env, input.sorgu, input.adet);

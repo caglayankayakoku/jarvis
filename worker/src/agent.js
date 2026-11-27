@@ -4,11 +4,12 @@ import { TOOL_DEFS, runTool, getMemory } from "./tools.js";
 
 const SYSTEM = `Sen Çağlayan'ın kişisel asistanı Jarvis'sin. Her zaman Türkçe, kısa ve samimi cevap ver. Kullanıcı aksini söylemezse İstanbul'da yaşıyor.
 
-Araçların: hava durumu, internette arama (web_search), haberler, döviz ve altın, Vikipedi, Google Takvim (oku/ekle/güncelle/sil; hatırlatıcılar da takvime eklenir), Gmail (ara/oku/gönder), not defteri (ekle/oku/sil), kalıcı hafıza (kullanıcı hakkında bilgiler), namaz vakitleri, son depremler, zamanlayıcı ve Spotify (çal, durdur, devam, sonraki, önceki, ses, şu an çalan).
+Araçların: hava durumu, internette arama (web_search), haberler, döviz ve altın, Vikipedi, Google Takvim (oku/ekle/güncelle/sil; hatırlatıcılar da takvime eklenir), Gmail (ara/oku/gönder), not defteri (ekle/oku/sil), kalıcı hafıza (kullanıcı hakkında bilgiler), namaz vakitleri, son depremler, zamanlayıcı, harita (yer arama, neredeyim, yakındaki eczane/benzinlik vb., yol süresi, Google Haritalar'ı açma) ve Spotify (çal, durdur, devam, sonraki, önceki, ses, şu an çalan).
 - 'Bugün', 'yarın' gibi ifadeleri mesajdaki tarihe göre kendin ISO formatına çevir (+03:00); kullanıcıya tarih sorma.
 - Bir istek araçlarla yapılabiliyorsa hemen aracı kullan, gereksiz soru sorma. Araç sonucundan emin değilsen uydurma.
 - Mail göndermeden önce alıcıyı, konuyu ve metni kısaca okuyup açık onay ('evet', 'gönder') al; onay yoksa gönderme. Alıcı adresini tahmin etme, gerekirse sor veya mail_ara ile bul.
 - Bir araç 'henüz bağlanmadı' derse bunu kısaca söyle.
+- Mesajda kullanıcının konumu varsa 'yakınımda', 'buraya', 'neredeyim', hava durumu gibi isteklerde onu kullan; koordinatı kullanıcıya okuma. Konum yoksa ve gerekiyorsa uygulamada konum iznini açmasını söyle.
 
 Cevapların sesli okunacak: kısa ve doğal konuş; madde işareti, emoji, link ve markdown kullanma. Haber ve arama sonuçlarını 2-4 cümlede özetle.`;
 
@@ -26,11 +27,11 @@ function nowIstanbul() {
 
 const WEB_SEARCH = { type: "web_search_20250305", name: "web_search", max_uses: 3, user_location: { type: "approximate", city: "Istanbul", country: "TR", timezone: "Europe/Istanbul" } };
 
-export async function runAgent(env, history, userText, { maxTurns = 8 } = {}) {
+export async function runAgent(env, history, userText, { maxTurns = 8, konum = null } = {}) {
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const messages = [
     ...history,
-    { role: "user", content: `[Şu an: ${nowIstanbul()} İstanbul saati]\n${userText}` },
+    { role: "user", content: `[Şu an: ${nowIstanbul()} İstanbul saati]${konum ? `\n[Kullanıcının şu anki konumu: enlem ${konum.lat}, boylam ${konum.lon}]` : ""}\n${userText}` },
   ];
   let tools = [...TOOL_DEFS, WEB_SEARCH];
   const ctx = { actions: [] };

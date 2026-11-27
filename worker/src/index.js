@@ -36,7 +36,9 @@ async function handleChat(req, env) {
 
   const key = "hist:" + sid;
   const history = JSON.parse((await env.KV.get(key)) || "[]");
-  const { text: answer, actions } = await runAgent(env, history, text);
+  const k = body.konum;
+  const konum = k && Number.isFinite(+k.lat) && Number.isFinite(+k.lon) ? { lat: (+k.lat).toFixed(5), lon: (+k.lon).toFixed(5) } : null;
+  const { text: answer, actions } = await runAgent(env, history, text, { konum });
   const next = [...history, { role: "user", content: text }, { role: "assistant", content: answer }].slice(-HISTORY_LIMIT);
   await env.KV.put(key, JSON.stringify(next), { expirationTtl: 60 * 60 * 24 * 7 });
   return json({ output: answer, actions: actions || [] });

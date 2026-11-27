@@ -132,13 +132,30 @@ async function ask(text){
   add(text,true);state('thinking','DÜŞÜNÜYOR');
   try{
     const ac=new AbortController();const to=setTimeout(()=>ac.abort(),60000);
-    const r=await fetch(API,{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','X-Jarvis-Key':key},body:JSON.stringify({chatInput:text,sessionId:sid})});clearTimeout(to);
+    const konum=await getPos();
+    const r=await fetch(API,{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','X-Jarvis-Key':key},body:JSON.stringify({chatInput:text,sessionId:sid,konum})});clearTimeout(to);
     if(r.status===401||r.status===403){key=null;store.set('jarvis-key','');add('Şifre hatalı görünüyor, tekrar gir.');$('keybox').classList.add('on');return state()}
     const j=await r.json().catch(()=>({}));
     const out=(r.ok&&(Array.isArray(j)?j[0]:j)?.output)||'Beynim şu an yanıt veremedi, birazdan tekrar dener misin?';
     add(out);speak(out);
-    for(const a of (j&&j.actions)||[])if(a.tur==='zamanlayici')setTimer(a.saniye,a.etiket);
+    for(const a of (j&&j.actions)||[]){if(a.tur==='zamanlayici')setTimer(a.saniye,a.etiket);if(a.tur==='harita')openMap(a.url)}
   }catch(e){const m=e.name==='AbortError'?'Beynim şu an çok yoğun, cevap gecikti. Birazdan tekrar sorar mısın?':'Bağlantı kurulamadı. İnternetini kontrol et.';add(m);speak(m)}
+}
+// location (asks permission once; cached 2 min)
+let pos=null,posAt=0,posDenied=false;
+function getPos(){
+  if(posDenied||!navigator.geolocation)return Promise.resolve(null);
+  if(pos&&Date.now()-posAt<120000)return Promise.resolve(pos);
+  return new Promise(res=>{let done=false;const fin=v=>{if(!done){done=true;res(v)}};
+    setTimeout(()=>fin(pos),4000);
+    navigator.geolocation.getCurrentPosition(p=>{pos={lat:p.coords.latitude,lon:p.coords.longitude};posAt=Date.now();fin(pos)},e=>{if(e.code===1)posDenied=true;fin(pos)},{enableHighAccuracy:true,maximumAge:120000,timeout:3500})});
+}
+// maps
+function openMap(url){
+  const m=document.createElement('div');m.className='msg';const s=document.createElement('small');s.textContent='HARİTA';
+  const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.textContent='🗺 Google Haritalar\'da aç';a.style.cssText='display:inline-block;margin-top:4px;padding:8px 14px;border:1px solid currentColor;border-radius:10px;color:inherit;text-decoration:none';
+  m.append(s,a);$('log').append(m);$('log').scrollTop=1e9;
+  const w=window.open(url,'_blank');if(!w){/* popup blocked: user taps the button */}
 }
 // timers
 let actx=null;
