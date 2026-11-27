@@ -109,18 +109,6 @@ export default {
           spotifyAyarli: !!(env.SPOTIFY_CLIENT_ID && env.SPOTIFY_CLIENT_SECRET),
           spotifySecretBicim: /^[0-9a-f]{32}$/i.test(String(env.SPOTIFY_CLIENT_SECRET || "").trim()),
         });
-      if (path === "/test-fetch" && req.method === "GET") {
-        const out = {};
-        for (const u of url.searchParams.getAll("u")) {
-          try {
-            const r = await fetch(u, { headers: { "user-agent": "Mozilla/5.0 Jarvis" }, signal: AbortSignal.timeout(8000) });
-            out[u] = r.status + " " + (await r.text()).slice(0, 150);
-          } catch (e) {
-            out[u] = "ERR " + e.message;
-          }
-        }
-        return json(out);
-      }
       if (path === "/gecmis" && req.method === "GET") {
         const list = await env.KV.list({ prefix: "hist:" });
         const out = {};

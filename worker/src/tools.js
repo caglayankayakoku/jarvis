@@ -23,18 +23,13 @@ export const TOOL_DEFS = [
   },
   {
     name: "kripto",
-    description: "Kripto paraların (bitcoin, ethereum, solana, usdt vb.) güncel TL ve dolar fiyatını ve 24 saatlik değişimini getirir.",
+    description: "Kripto paraların (bitcoin, ethereum, solana, usdt vb.) güncel TL ve dolar fiyatını getirir.",
     input_schema: obj({ coinler: { type: "array", items: { type: "string" }, description: "Coin adları veya sembolleri" } }, ["coinler"]),
   },
   {
     name: "hisse",
     description: "Hisse senedi veya endeks fiyatını getirir. Borsa İstanbul için sembolün sonuna .IS ekle (THYAO.IS, ASELS.IS, XU100.IS). Yabancı hisseler için düz sembol (AAPL, TSLA).",
     input_schema: obj({ semboller: { type: "array", items: { type: "string" } } }, ["semboller"]),
-  },
-  {
-    name: "sozluk",
-    description: "TDK Güncel Türkçe Sözlük'ten bir kelimenin anlamlarını ve örnek kullanımını getirir.",
-    input_schema: obj({ kelime: { type: "string" } }, ["kelime"]),
   },
   {
     name: "wikipedia",
@@ -236,34 +231,23 @@ const COIN = { bitcoin: "BTC", btc: "BTC", ethereum: "ETH", eth: "ETH", ether: "
   pepe: "PEPE", toncoin: "TON", ton: "TON", sui: "SUI", polygon: "POL", matic: "POL", usdc: "USDC" };
 
 async function crypto({ coinler = [] }) {
-  // Önce BtcTurk (TL paritesi), olmazsa CoinGecko.
-  let tickers = null;
-  try {
-    const j = await getJson("https://api.btcturk.com/api/v2/ticker");
-    tickers = Object.fromEntries((j.data || []).map((t) => [t.pair, t]));
-  } catch (e) {}
-  const out = [], rest = [];
-  for (const c of coinler.slice(0, 6)) {
-    const sym = COIN[String(c).toLowerCase().trim()] || String(c).toUpperCase().trim();
-    const t = tickers?.[sym + "TRY"], u = tickers?.[sym + "USDT"];
-    if (t) out.push({ coin: sym, tl: t.last, dolar: u?.last, degisim_24s_yuzde: t.dailyPercent, kaynak: "BtcTurk" });
-    else rest.push(c);
-  }
-  if (rest.length) {
+  // Coinbase herkese açık spot fiyatı (Cloudflare'den erişilebiliyor).
+  const spot = async (sym, cur) => {
     try {
-      const ids = await Promise.all(rest.map(async (c) => (await getJson("https://api.coingecko.com/api/v3/search?query=" + encodeURIComponent(c))).coins?.[0]?.id));
-      const list = [...new Set(ids.filter(Boolean))];
-      if (list.length) {
-        const p = new URLSearchParams({ ids: list.join(","), vs_currencies: "try,usd", include_24hr_change: "true" });
-        const j = await getJson("https://api.coingecko.com/api/v3/simple/price?" + p);
-        for (const [id, v] of Object.entries(j))
-          out.push({ coin: id, tl: v.try, dolar: v.usd, degisim_24s_yuzde: v.usd_24h_change && +v.usd_24h_change.toFixed(2), kaynak: "CoinGecko" });
-      }
+      const j = await getJson(`https://api.coinbase.com/v2/prices/${sym}-${cur}/spot`);
+      return +(+j.data.amount).toFixed(sym === "SHIB" || sym === "PEPE" ? 8 : 2);
     } catch (e) {
-      for (const c of rest) out.push({ coin: c, hata: "Fiyat alınamadı, web_search ile dene" });
+      return undefined;
     }
-  }
-  return out.length ? out : { sonuc: "Coin bulunamadı" };
+  };
+  const out = await Promise.all(
+    coinler.slice(0, 6).map(async (c) => {
+      const sym = COIN[String(c).toLowerCase().trim()] || String(c).toUpperCase().trim();
+      const [tl, dolar] = await Promise.all([spot(sym, "TRY"), spot(sym, "USD")]);
+      return tl || dolar ? { coin: sym, tl, dolar } : { coin: c, hata: "Fiyat bulunamadı, web_search ile dene" };
+    })
+  );
+  return out.length ? out : { sonuc: "Coin belirtilmedi" };
 }
 
 async function stocks({ semboller = [] }) {
@@ -288,25 +272,6 @@ async function stocks({ semboller = [] }) {
       }
     })
   );
-}
-
-async function tdk({ kelime }) {
-  let j;
-  try {
-    j = await getJson("https://sozluk.gov.tr/gts?ara=" + encodeURIComponent(kelime));
-  } catch (e) {
-    try {
-      j = await getJson("http://sozluk.gov.tr/gts?ara=" + encodeURIComponent(kelime));
-    } catch (e2) {
-      return { hata: "TDK sunucusuna ulaşılamadı; anlamı web_search ile (site:sozluk.gov.tr) veya kendi bilginle ver." };
-    }
-  }
-  if (!Array.isArray(j)) return { sonuc: "Sözlükte bulunamadı" };
-  return j.slice(0, 2).map((m) => ({
-    madde: m.madde,
-    koken: m.lisan || undefined,
-    anlamlar: (m.anlamlarListe || []).slice(0, 5).map((a) => ({ anlam: a.anlam, ornek: a.orneklerListe?.[0]?.ornek })),
-  }));
 }
 
 async function wiki({ konu }) {
@@ -378,8 +343,6 @@ export async function runTool(env, name, input, ctx = { actions: [] }) {
       return crypto(input);
     case "hisse":
       return stocks(input);
-    case "sozluk":
-      return tdk(input);
     case "takvim_oku":
       return calendarList(env, input.baslangic, input.bitis);
     case "takvim_ekle":
