@@ -15,6 +15,7 @@ crons = ["0 5 * * *"]
 [vars]
 MODEL = "claude-haiku-5-5"
 APP_ORIGIN = "https://caglayankayakoku.github.io"
+GOOGLE_CLIENT_ID = "249973334196-k2p2vdb4kucb7kff2jhcg1if6c2pen3q.apps.googleusercontent.com"
 
 [observability]
 enabled = true
