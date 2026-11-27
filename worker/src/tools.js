@@ -291,7 +291,16 @@ async function stocks({ semboller = [] }) {
 }
 
 async function tdk({ kelime }) {
-  const j = await getJson("https://sozluk.gov.tr/gts?ara=" + encodeURIComponent(kelime));
+  let j;
+  try {
+    j = await getJson("https://sozluk.gov.tr/gts?ara=" + encodeURIComponent(kelime));
+  } catch (e) {
+    try {
+      j = await getJson("http://sozluk.gov.tr/gts?ara=" + encodeURIComponent(kelime));
+    } catch (e2) {
+      return { hata: "TDK sunucusuna ulaşılamadı; anlamı web_search ile (site:sozluk.gov.tr) veya kendi bilginle ver." };
+    }
+  }
   if (!Array.isArray(j)) return { sonuc: "Sözlükte bulunamadı" };
   return j.slice(0, 2).map((m) => ({
     madde: m.madde,
