@@ -2,7 +2,7 @@
 const UA = { "user-agent": "JarvisPersonalAssistant/1.0", "accept-language": "tr" };
 
 async function j(url, init = {}) {
-  const r = await fetch(url, { ...init, headers: { ...UA, ...(init.headers || {}) } });
+  const r = await fetch(url, { signal: AbortSignal.timeout(init.timeout || 8000), ...init, headers: { ...UA, ...(init.headers || {}) } });
   if (!r.ok) throw new Error(`${new URL(url).host} -> ${r.status}`);
   return r.json();
 }
@@ -73,16 +73,10 @@ export async function nearby({ tur, enlem, boylam, yaricap_m = 1500 }) {
   if (!f) return { hata: "Desteklenen türler: " + Object.keys(TYPES).join(", ") };
   const rad = Math.min(Math.max(200, yaricap_m || 1500), 10000);
   const q = `[out:json][timeout:20];nwr${f}(around:${rad},${enlem},${boylam});out center 40;`;
-  let r, lastErr;
-  for (const host of OVERPASS) {
-    try {
-      r = await j(host + "?" + new URLSearchParams({ data: q }));
-      break;
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  if (!r) throw lastErr;
+  // Aynı anda tüm sunuculara sor, ilk başarılı cevabı al.
+  const r = await Promise.any(OVERPASS.map((h) => j(h + "?" + new URLSearchParams({ data: q }), { timeout: 9000 }))).catch((e) => {
+    throw new Error("Harita servisleri yanıt vermedi: " + (e.errors || []).map((x) => x.message).join("; "));
+  });
   const me = { lat: enlem, lon: boylam };
   const items = (r.elements || [])
     .map((e) => {
