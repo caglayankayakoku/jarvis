@@ -230,18 +230,40 @@ async function fx() {
   return Object.fromEntries(keys.filter((k) => k in j).map((k) => [k, j[k]]));
 }
 
+const COIN = { bitcoin: "BTC", btc: "BTC", ethereum: "ETH", eth: "ETH", ether: "ETH", solana: "SOL", sol: "SOL", tether: "USDT", usdt: "USDT",
+  ripple: "XRP", xrp: "XRP", avalanche: "AVAX", avax: "AVAX", dogecoin: "DOGE", doge: "DOGE", bnb: "BNB", binance: "BNB", cardano: "ADA", ada: "ADA",
+  tron: "TRX", trx: "TRX", polkadot: "DOT", dot: "DOT", chainlink: "LINK", link: "LINK", litecoin: "LTC", ltc: "LTC", shiba: "SHIB", shib: "SHIB",
+  pepe: "PEPE", toncoin: "TON", ton: "TON", sui: "SUI", polygon: "POL", matic: "POL", usdc: "USDC" };
+
 async function crypto({ coinler = [] }) {
-  const ids = await Promise.all(
-    coinler.slice(0, 6).map(async (c) => {
-      const s = await getJson("https://api.coingecko.com/api/v3/search?query=" + encodeURIComponent(c));
-      return s.coins?.[0]?.id;
-    })
-  );
-  const list = [...new Set(ids.filter(Boolean))];
-  if (!list.length) return { sonuc: "Coin bulunamadı" };
-  const p = new URLSearchParams({ ids: list.join(","), vs_currencies: "try,usd", include_24hr_change: "true" });
-  const j = await getJson("https://api.coingecko.com/api/v3/simple/price?" + p);
-  return Object.entries(j).map(([id, v]) => ({ coin: id, tl: v.try, dolar: v.usd, degisim_24s_yuzde: v.usd_24h_change && +v.usd_24h_change.toFixed(2) }));
+  // Önce BtcTurk (TL paritesi), olmazsa CoinGecko.
+  let tickers = null;
+  try {
+    const j = await getJson("https://api.btcturk.com/api/v2/ticker");
+    tickers = Object.fromEntries((j.data || []).map((t) => [t.pair, t]));
+  } catch (e) {}
+  const out = [], rest = [];
+  for (const c of coinler.slice(0, 6)) {
+    const sym = COIN[String(c).toLowerCase().trim()] || String(c).toUpperCase().trim();
+    const t = tickers?.[sym + "TRY"], u = tickers?.[sym + "USDT"];
+    if (t) out.push({ coin: sym, tl: t.last, dolar: u?.last, degisim_24s_yuzde: t.dailyPercent, kaynak: "BtcTurk" });
+    else rest.push(c);
+  }
+  if (rest.length) {
+    try {
+      const ids = await Promise.all(rest.map(async (c) => (await getJson("https://api.coingecko.com/api/v3/search?query=" + encodeURIComponent(c))).coins?.[0]?.id));
+      const list = [...new Set(ids.filter(Boolean))];
+      if (list.length) {
+        const p = new URLSearchParams({ ids: list.join(","), vs_currencies: "try,usd", include_24hr_change: "true" });
+        const j = await getJson("https://api.coingecko.com/api/v3/simple/price?" + p);
+        for (const [id, v] of Object.entries(j))
+          out.push({ coin: id, tl: v.try, dolar: v.usd, degisim_24s_yuzde: v.usd_24h_change && +v.usd_24h_change.toFixed(2), kaynak: "CoinGecko" });
+      }
+    } catch (e) {
+      for (const c of rest) out.push({ coin: c, hata: "Fiyat alınamadı, web_search ile dene" });
+    }
+  }
+  return out.length ? out : { sonuc: "Coin bulunamadı" };
 }
 
 async function stocks({ semboller = [] }) {
