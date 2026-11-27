@@ -74,6 +74,7 @@ export async function calendarList(env, timeMin, timeMax) {
   const p = new URLSearchParams({ timeMin, timeMax, singleEvents: "true", orderBy: "startTime", maxResults: "25" });
   const j = await gapi(env, "https://www.googleapis.com/calendar/v3/calendars/primary/events?" + p);
   return (j.items || []).map((e) => ({
+    id: e.id,
     baslik: e.summary || "(başlıksız)",
     baslangic: e.start?.dateTime || e.start?.date,
     bitis: e.end?.dateTime || e.end?.date,
@@ -98,6 +99,24 @@ export async function calendarCreate(env, { baslik, baslangic, bitis, aciklama, 
   return { tamam: true, baslik: e.summary, baslangic: e.start?.dateTime };
 }
 
+export async function calendarDelete(env, id) {
+  await gapi(env, "https://www.googleapis.com/calendar/v3/calendars/primary/events/" + encodeURIComponent(id), { method: "DELETE" });
+  return { silindi: true };
+}
+
+export async function calendarUpdate(env, { id, baslik, baslangic, bitis, aciklama }) {
+  const body = {};
+  if (baslik) body.summary = baslik;
+  if (aciklama) body.description = aciklama;
+  if (baslangic) body.start = { dateTime: baslangic, timeZone: "Europe/Istanbul" };
+  if (bitis) body.end = { dateTime: bitis, timeZone: "Europe/Istanbul" };
+  const e = await gapi(env, "https://www.googleapis.com/calendar/v3/calendars/primary/events/" + encodeURIComponent(id), {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  return { guncellendi: true, baslik: e.summary, baslangic: e.start?.dateTime || e.start?.date };
+}
+
 // ---- Gmail ----
 export async function gmailSearch(env, q, max = 5) {
   const p = new URLSearchParams({ q: q || "is:unread", maxResults: String(Math.min(max || 5, 10)) });
@@ -110,10 +129,39 @@ export async function gmailSearch(env, q, max = 5) {
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`
       );
       const h = Object.fromEntries((m.payload?.headers || []).map((x) => [x.name, x.value]));
-      return { kimden: h.From, konu: h.Subject, tarih: h.Date, ozet: m.snippet };
+      return { id, kimden: h.From, konu: h.Subject, tarih: h.Date, ozet: m.snippet };
     })
   );
   return out;
+}
+
+function decodeB64url(data) {
+  const bin = atob(data.replace(/-/g, "+").replace(/_/g, "/"));
+  return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+}
+
+function findBody(part) {
+  if (!part) return null;
+  if (part.mimeType === "text/plain" && part.body?.data) return { text: decodeB64url(part.body.data) };
+  for (const p of part.parts || []) {
+    const r = findBody(p);
+    if (r?.text) return r;
+  }
+  if (part.mimeType === "text/html" && part.body?.data) return { html: decodeB64url(part.body.data) };
+  for (const p of part.parts || []) {
+    const r = findBody(p);
+    if (r) return r;
+  }
+  return null;
+}
+
+export async function gmailRead(env, id) {
+  const m = await gapi(env, `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=full`);
+  const h = Object.fromEntries((m.payload?.headers || []).map((x) => [x.name, x.value]));
+  const b = findBody(m.payload) || {};
+  let text = b.text || (b.html || "").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ");
+  text = text.replace(/\s+/g, " ").trim().slice(0, 6000);
+  return { kimden: h.From, konu: h.Subject, tarih: h.Date, metin: text || m.snippet };
 }
 
 export async function gmailMyAddress(env) {

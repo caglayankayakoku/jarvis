@@ -137,7 +137,17 @@ async function ask(text){
     const j=await r.json().catch(()=>({}));
     const out=(r.ok&&(Array.isArray(j)?j[0]:j)?.output)||'Beynim şu an yanıt veremedi, birazdan tekrar dener misin?';
     add(out);speak(out);
+    for(const a of (j&&j.actions)||[])if(a.tur==='zamanlayici')setTimer(a.saniye,a.etiket);
   }catch(e){const m=e.name==='AbortError'?'Beynim şu an çok yoğun, cevap gecikti. Birazdan tekrar sorar mısın?':'Bağlantı kurulamadı. İnternetini kontrol et.';add(m);speak(m)}
+}
+// timers
+let actx=null;
+function beep(n){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();for(let i=0;i<n;i++){const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=880;o.connect(g);g.connect(actx.destination);const t=actx.currentTime+i*0.5;g.gain.setValueAtTime(0.3,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.4);o.start(t);o.stop(t+0.4)}}catch(e){}}
+function setTimer(sn,label){
+  try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume()}catch(e){}
+  const end=Date.now()+sn*1000;
+  setTimeout(()=>{beep(6);if(navigator.vibrate)navigator.vibrate([400,200,400,200,400]);const m='Çağlayan, süre doldu: '+label;add(m);speak(m)},sn*1000);
+  const mins=Math.round(sn/60);add('⏱ '+label+' ('+(sn<90?sn+' sn':mins+' dk')+') kuruldu. Uygulamayı açık tut.');
 }
 let pending=null;
 $('keybtn').onclick=()=>{const v=$('keyin').value.trim();if(!v)return;key=v;store.set('jarvis-key',v);$('keybox').classList.remove('on');if(pending){const p=pending;pending=null;ask(p)}};

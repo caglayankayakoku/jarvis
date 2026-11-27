@@ -1,5 +1,5 @@
 // Jarvis'in araçları: Claude'a tanıtılan tanımlar ve onları çalıştıran kod.
-import { calendarList, calendarCreate, gmailSearch, gmailSend } from "./google.js";
+import { calendarList, calendarCreate, calendarDelete, calendarUpdate, gmailSearch, gmailRead, gmailSend } from "./google.js";
 import { spotifyPlay, spotifyControl, spotifyNowPlaying } from "./spotify.js";
 
 const obj = (properties, required = []) => ({ type: "object", properties, required, additionalProperties: false });
@@ -45,9 +45,27 @@ export const TOOL_DEFS = [
     ),
   },
   {
+    name: "takvim_sil",
+    description: "Takvimden bir etkinliği siler. id'yi önce takvim_oku ile bul. Silmeden önce hangi etkinlik olduğunu kullanıcıya söyleyip onay al.",
+    input_schema: obj({ id: { type: "string" } }, ["id"]),
+  },
+  {
+    name: "takvim_guncelle",
+    description: "Takvimdeki bir etkinliğin başlığını, saatini veya açıklamasını değiştirir. id'yi önce takvim_oku ile bul. Sadece değişen alanları ver.",
+    input_schema: obj(
+      { id: { type: "string" }, baslik: { type: "string" }, baslangic: { type: "string" }, bitis: { type: "string" }, aciklama: { type: "string" } },
+      ["id"]
+    ),
+  },
+  {
     name: "mail_ara",
     description: "Gmail'de mail arar ve kimden/konu/özet döndürür. Gmail arama sözdizimi kullan (örn. 'is:unread newer_than:1d', 'from:ali').",
     input_schema: obj({ sorgu: { type: "string" }, adet: { type: "number" } }, ["sorgu"]),
+  },
+  {
+    name: "mail_oku",
+    description: "Bir mailin tam metnini getirir. id'yi önce mail_ara ile bul. Kullanıcı 'şu maili oku/özetle' derse kullan.",
+    input_schema: obj({ id: { type: "string" } }, ["id"]),
   },
   {
     name: "mail_gonder",
@@ -71,6 +89,31 @@ export const TOOL_DEFS = [
     name: "not_sil",
     description: "Not defterinden bir notu sırasına göre (1'den başlar) siler.",
     input_schema: obj({ sira: { type: "number" } }, ["sira"]),
+  },
+  {
+    name: "hafiza_kaydet",
+    description: "Kullanıcı hakkında kalıcı bir bilgiyi hatırlamak için kaydeder (ör. doğum günü, sevdiği takım, eşinin adı, tercihleri). Kullanıcı 'bunu unutma/hatırla' derse veya önemli kişisel bir bilgi paylaşırsa kullan. Kısa ve tek cümle yaz.",
+    input_schema: obj({ bilgi: { type: "string" } }, ["bilgi"]),
+  },
+  {
+    name: "hafiza_sil",
+    description: "Kalıcı hafızadan bir bilgiyi sırasına göre (1'den başlar) siler. Hafıza sistem mesajında numaralı listelenir.",
+    input_schema: obj({ sira: { type: "number" } }, ["sira"]),
+  },
+  {
+    name: "namaz_vakitleri",
+    description: "Bir şehrin bugünkü (veya verilen tarihteki) namaz/ezan vakitlerini Diyanet hesabıyla getirir. İftar = akşam, sahur/imsak = imsak.",
+    input_schema: obj({ sehir: { type: "string" }, tarih: { type: "string", description: "GG-AA-YYYY, boşsa bugün" } }, ["sehir"]),
+  },
+  {
+    name: "depremler",
+    description: "Türkiye ve çevresindeki son depremleri (büyüklük, yer, saat, derinlik) getirir.",
+    input_schema: obj({ min_buyukluk: { type: "number", description: "Varsayılan 3" }, saat: { type: "number", description: "Son kaç saat, varsayılan 24" } }),
+  },
+  {
+    name: "zamanlayici",
+    description: "Uygulamada geri sayım/alarm kurar; süre dolunca telefon sesli uyarır. 'Beş dakika sonra haber ver', 'yumurta için 7 dakika' gibi kısa süreler için kullan. Uygulama açık kalmalı; saatler sonrası için takvim_ekle hatırlatıcısını tercih et.",
+    input_schema: obj({ saniye: { type: "number" }, etiket: { type: "string" } }, ["saniye"]),
   },
   {
     name: "muzik_cal",
@@ -145,11 +188,51 @@ async function wiki({ konu }) {
   return { baslik: title, ozet: sum.extract };
 }
 
+async function prayerTimes({ sehir, tarih }) {
+  const d = tarih || new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Istanbul" }).format(new Date()).replace(/\//g, "-");
+  const p = new URLSearchParams({ city: sehir || "Istanbul", country: "Turkey", method: "13" });
+  const j = await getJson(`https://api.aladhan.com/v1/timingsByCity/${d}?` + p);
+  const t = j.data?.timings || {};
+  return { sehir, tarih: d, imsak: t.Imsak, gunes: t.Sunrise, ogle: t.Dhuhr, ikindi: t.Asr, aksam: t.Maghrib, yatsi: t.Isha, hicri: j.data?.date?.hijri?.date };
+}
+
+async function earthquakes({ min_buyukluk = 3, saat = 24 }) {
+  const mag = Math.max(0, min_buyukluk ?? 3);
+  const hours = Math.min(Math.max(1, saat ?? 24), 24 * 30);
+  const fmt = (d) => d.toISOString().slice(0, 19);
+  const end = new Date();
+  const start = new Date(end.getTime() - hours * 3600e3);
+  try {
+    const p = new URLSearchParams({ start: fmt(start), end: fmt(end), minmag: String(mag), orderby: "timedesc", limit: "15" });
+    const j = await getJson("https://deprem.afad.gov.tr/apiv2/event/filter?" + p);
+    if (Array.isArray(j))
+      return {
+        kaynak: "AFAD",
+        depremler: j.slice(0, 15).map((e) => ({ buyukluk: e.magnitude, yer: e.location, saat_utc: e.date, derinlik_km: e.depth })),
+      };
+  } catch (e) {}
+  const p = new URLSearchParams({
+    format: "geojson", starttime: fmt(start), minmagnitude: String(mag), orderby: "time", limit: "15",
+    minlatitude: "34", maxlatitude: "43", minlongitude: "24", maxlongitude: "46",
+  });
+  const j = await getJson("https://earthquake.usgs.gov/fdsnws/event/1/query?" + p);
+  return {
+    kaynak: "USGS",
+    depremler: (j.features || []).map((f) => ({
+      buyukluk: f.properties.mag, yer: f.properties.place, saat_utc: new Date(f.properties.time).toISOString(), derinlik_km: f.geometry?.coordinates?.[2],
+    })),
+  };
+}
+
+export async function getMemory(env) {
+  return JSON.parse((await env.KV.get("memory")) || "[]");
+}
+
 async function notes(env) {
   return JSON.parse((await env.KV.get("notes")) || "[]");
 }
 
-export async function runTool(env, name, input) {
+export async function runTool(env, name, input, ctx = { actions: [] }) {
   switch (name) {
     case "hava_durumu":
       return weather(input);
@@ -163,6 +246,34 @@ export async function runTool(env, name, input) {
       return calendarList(env, input.baslangic, input.bitis);
     case "takvim_ekle":
       return calendarCreate(env, input);
+    case "takvim_sil":
+      return calendarDelete(env, input.id);
+    case "takvim_guncelle":
+      return calendarUpdate(env, input);
+    case "mail_oku":
+      return gmailRead(env, input.id);
+    case "hafiza_kaydet": {
+      const m = await getMemory(env);
+      m.push(String(input.bilgi).slice(0, 300));
+      await env.KV.put("memory", JSON.stringify(m.slice(-100)));
+      return { kaydedildi: true };
+    }
+    case "hafiza_sil": {
+      const m = await getMemory(env);
+      const [silinen] = m.splice((input.sira || 0) - 1, 1);
+      await env.KV.put("memory", JSON.stringify(m));
+      return silinen ? { silindi: silinen } : { hata: "Bu sırada bilgi yok" };
+    }
+    case "namaz_vakitleri":
+      return prayerTimes(input);
+    case "depremler":
+      return earthquakes(input);
+    case "zamanlayici": {
+      const sn = Math.round(Number(input.saniye) || 0);
+      if (sn < 1 || sn > 24 * 3600) return { hata: "Süre 1 saniye ile 24 saat arasında olmalı" };
+      ctx.actions.push({ tur: "zamanlayici", saniye: sn, etiket: input.etiket || "Süre doldu" });
+      return { kuruldu: true, saniye: sn, not: "Uygulama açık kalmalı" };
+    }
     case "mail_ara":
       return gmailSearch(env, input.sorgu, input.adet);
     case "mail_gonder":

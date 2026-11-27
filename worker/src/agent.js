@@ -1,10 +1,10 @@
 // Jarvis'in beyni: Claude ile araç kullanma döngüsü.
 import Anthropic from "@anthropic-ai/sdk";
-import { TOOL_DEFS, runTool } from "./tools.js";
+import { TOOL_DEFS, runTool, getMemory } from "./tools.js";
 
 const SYSTEM = `Sen Çağlayan'ın kişisel asistanı Jarvis'sin. Her zaman Türkçe, kısa ve samimi cevap ver. Kullanıcı aksini söylemezse İstanbul'da yaşıyor.
 
-Araçların: hava durumu, internette arama (web_search), haberler, döviz ve altın, Vikipedi, Google Takvim (oku/ekle; hatırlatıcılar da takvime eklenir), Gmail (ara/gönder), not defteri (ekle/oku/sil) ve Spotify (çal, durdur, devam, sonraki, önceki, ses, şu an çalan).
+Araçların: hava durumu, internette arama (web_search), haberler, döviz ve altın, Vikipedi, Google Takvim (oku/ekle/güncelle/sil; hatırlatıcılar da takvime eklenir), Gmail (ara/oku/gönder), not defteri (ekle/oku/sil), kalıcı hafıza (kullanıcı hakkında bilgiler), namaz vakitleri, son depremler, zamanlayıcı ve Spotify (çal, durdur, devam, sonraki, önceki, ses, şu an çalan).
 - 'Bugün', 'yarın' gibi ifadeleri mesajdaki tarihe göre kendin ISO formatına çevir (+03:00); kullanıcıya tarih sorma.
 - Bir istek araçlarla yapılabiliyorsa hemen aracı kullan, gereksiz soru sorma. Araç sonucundan emin değilsen uydurma.
 - Mail göndermeden önce alıcıyı, konuyu ve metni kısaca okuyup açık onay ('evet', 'gönder') al; onay yoksa gönderme. Alıcı adresini tahmin etme, gerekirse sor veya mail_ara ile bul.
@@ -33,6 +33,11 @@ export async function runAgent(env, history, userText, { maxTurns = 8 } = {}) {
     { role: "user", content: `[Şu an: ${nowIstanbul()} İstanbul saati]\n${userText}` },
   ];
   let tools = [...TOOL_DEFS, WEB_SEARCH];
+  const ctx = { actions: [] };
+  const memory = await getMemory(env).catch(() => []);
+  const system = [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }];
+  if (memory.length)
+    system.push({ type: "text", text: "Kullanıcı hakkında hatırladıkların (kalıcı hafıza):\n" + memory.map((m, i) => `${i + 1}. ${m}`).join("\n") });
 
   for (let turn = 0; turn < maxTurns; turn++) {
     let res;
@@ -40,7 +45,7 @@ export async function runAgent(env, history, userText, { maxTurns = 8 } = {}) {
       res = await client.messages.create({
         model: env.MODEL || "claude-haiku-5-5",
         max_tokens: 4096,
-        system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
+        system,
         output_config: { effort: "low" },
         tools,
         messages,
@@ -60,14 +65,14 @@ export async function runAgent(env, history, userText, { maxTurns = 8 } = {}) {
     if (res.stop_reason === "pause_turn") continue;
     if (res.stop_reason !== "tool_use") {
       const text = res.content.filter((b) => b.type === "text").map((b) => b.text).join(" ").trim();
-      return { text: text || "Bunu şu an yapamadım.", messages };
+      return { text: text || "Bunu şu an yapamadım.", messages, actions: ctx.actions };
     }
 
     const calls = res.content.filter((b) => b.type === "tool_use");
     const results = await Promise.all(
       calls.map(async (c) => {
         try {
-          const out = await runTool(env, c.name, c.input || {});
+          const out = await runTool(env, c.name, c.input || {}, ctx);
           return { type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out).slice(0, 12000) };
         } catch (err) {
           return { type: "tool_result", tool_use_id: c.id, content: String(err.message || err), is_error: true };
@@ -76,5 +81,5 @@ export async function runAgent(env, history, userText, { maxTurns = 8 } = {}) {
     );
     messages.push({ role: "user", content: results });
   }
-  return { text: "Bu iş biraz uzun sürdü, tekrar dener misin?", messages };
+  return { text: "Bu iş biraz uzun sürdü, tekrar dener misin?", messages, actions: ctx.actions };
 }

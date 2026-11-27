@@ -36,10 +36,10 @@ async function handleChat(req, env) {
 
   const key = "hist:" + sid;
   const history = JSON.parse((await env.KV.get(key)) || "[]");
-  const { text: answer } = await runAgent(env, history, text);
+  const { text: answer, actions } = await runAgent(env, history, text);
   const next = [...history, { role: "user", content: text }, { role: "assistant", content: answer }].slice(-HISTORY_LIMIT);
   await env.KV.put(key, JSON.stringify(next), { expirationTtl: 60 * 60 * 24 * 7 });
-  return json({ output: answer });
+  return json({ output: answer, actions: actions || [] });
 }
 
 const BRIEF_PROMPT = `Sabah brifingi hazırla. Araçlarla şunları topla: İstanbul hava durumu, bugünün takvim etkinlikleri, son 24 saatteki okunmamış önemli mailler (mail_ara: is:unread newer_than:1d, adet 10), Türkiye gündeminden 4-5 önemli başlık, dolar, euro ve gram altın.
