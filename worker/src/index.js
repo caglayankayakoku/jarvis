@@ -103,6 +103,7 @@ export default {
       if (path === "/chat" && req.method === "POST") return await handleChat(req, env);
       if (path === "/durum" && req.method === "GET")
         return json({
+          model: env.MODEL || "claude-haiku-5-5",
           google: !!(await env.KV.get("google:refresh")),
           spotify: !!(await env.KV.get("spotify:refresh")),
           googleAyarli: !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),

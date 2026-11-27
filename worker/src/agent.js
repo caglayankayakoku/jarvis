@@ -48,6 +48,7 @@ export async function runAgent(env, history, userText, { maxTurns = 8, konum = n
   const ctx = { actions: [] };
   const memory = await getMemory(env).catch(() => []);
   const system = [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }];
+  system.push({ type: "text", text: `Beynin: Anthropic'in Claude modeli (${env.MODEL || "claude-haiku-5-5"}). Sorulursa bunu söyle.` });
   if (memory.length)
     system.push({ type: "text", text: "Kullanıcı hakkında hatırladıkların (kalıcı hafıza):\n" + memory.map((m, i) => `${i + 1}. ${m}`).join("\n") });
 
