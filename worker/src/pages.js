@@ -48,3 +48,13 @@ export function resultPage(ok, message) {
 </main></body></html>`;
   return new Response(html, { status: ok ? 200 : 400, headers: { "content-type": "text/html; charset=utf-8" } });
 }
+
+export function privacyPage() {
+  const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jarvis Gizlilik</title><style>${STYLE}</style></head><body><main><h1>JARVIS</h1>
+<div class="card"><b>Gizlilik</b>
+<p>Jarvis tek bir kişinin kendi kullanımı için yapılmış kişisel bir asistandır. Google (Gmail, Takvim) ve Spotify verileri yalnızca sahibinin isteklerini yerine getirmek için okunur, başka kimseyle paylaşılmaz, satılmaz ve reklam için kullanılmaz.</p>
+<p>Bağlantı jetonları sunucuda şifreli saklanır. Erişimi istediğin an Google hesabı ayarlarından (Güvenlik, Üçüncü taraf erişimi) kaldırabilirsin.</p></div>
+</main></body></html>`;
+  return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+}

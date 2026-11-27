@@ -6,7 +6,7 @@
 import { runAgent } from "./agent.js";
 import { googleAuthUrl, googleExchangeCode, gmailMyAddress, gmailSend } from "./google.js";
 import { spotifyAuthUrl, spotifyExchangeCode } from "./spotify.js";
-import { setupPage, resultPage } from "./pages.js";
+import { setupPage, resultPage, privacyPage } from "./pages.js";
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -92,6 +92,7 @@ export default {
     try {
       if (path === "/" && req.method === "GET") return json({ jarvis: "çalışıyor" });
       if (path === "/kurulum" && req.method === "GET") return setupPage(url.origin);
+      if (path === "/gizlilik" && req.method === "GET") return privacyPage();
       if (path === "/oauth/google" && req.method === "GET") return finishOAuth(req, env, "google");
       if (path === "/oauth/spotify" && req.method === "GET") return finishOAuth(req, env, "spotify");
 
