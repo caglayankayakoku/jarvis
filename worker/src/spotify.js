@@ -4,7 +4,7 @@ export const SPOTIFY_SCOPES = "user-read-playback-state user-modify-playback-sta
 
 export function spotifyAuthUrl(env, redirectUri, state) {
   const p = new URLSearchParams({
-    client_id: env.SPOTIFY_CLIENT_ID,
+    client_id: String(env.SPOTIFY_CLIENT_ID).trim(),
     response_type: "code",
     redirect_uri: redirectUri,
     scope: SPOTIFY_SCOPES,
@@ -14,7 +14,7 @@ export function spotifyAuthUrl(env, redirectUri, state) {
 }
 
 function basicAuth(env) {
-  return "Basic " + btoa(`${env.SPOTIFY_CLIENT_ID}:${env.SPOTIFY_CLIENT_SECRET}`);
+  return "Basic " + btoa(`${String(env.SPOTIFY_CLIENT_ID).trim()}:${String(env.SPOTIFY_CLIENT_SECRET).trim()}`);
 }
 
 export async function spotifyExchangeCode(env, code, redirectUri) {

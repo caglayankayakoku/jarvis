@@ -105,6 +105,7 @@ export default {
           spotify: !!(await env.KV.get("spotify:refresh")),
           googleAyarli: !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
           spotifyAyarli: !!(env.SPOTIFY_CLIENT_ID && env.SPOTIFY_CLIENT_SECRET),
+          spotifySecretBicim: /^[0-9a-f]{32}$/i.test(String(env.SPOTIFY_CLIENT_SECRET || "").trim()),
         });
       if (path === "/baglan/google" && req.method === "POST") return startOAuth(req, env, "google");
       if (path === "/baglan/spotify" && req.method === "POST") return startOAuth(req, env, "spotify");
