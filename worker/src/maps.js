@@ -61,16 +61,28 @@ const TYPES = {
   sarj: '["amenity"="charging_station"]',
 };
 
+const OVERPASS = [
+  "https://overpass.private.coffee/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass-api.de/api/interpreter",
+];
+
 export async function nearby({ tur, enlem, boylam, yaricap_m = 1500 }) {
   const f = TYPES[tur];
   if (!f) return { hata: "Desteklenen türler: " + Object.keys(TYPES).join(", ") };
   const rad = Math.min(Math.max(200, yaricap_m || 1500), 10000);
   const q = `[out:json][timeout:20];nwr${f}(around:${rad},${enlem},${boylam});out center 40;`;
-  const r = await j("https://overpass-api.de/api/interpreter", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ data: q }),
-  });
+  let r, lastErr;
+  for (const host of OVERPASS) {
+    try {
+      r = await j(host + "?" + new URLSearchParams({ data: q }));
+      break;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (!r) throw lastErr;
   const me = { lat: enlem, lon: boylam };
   const items = (r.elements || [])
     .map((e) => {
