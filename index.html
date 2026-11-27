@@ -105,7 +105,7 @@ body{display:flex;flex-direction:column;padding:env(safe-area-inset-top) 16px en
 </div></div>
 
 <script>
-const API = 'https://kayakoku.app.n8n.cloud/webhook/382aae0880664a37';
+const API = 'https://jarvis.caglayankayakoku.workers.dev/chat';
 const $ = id => document.getElementById(id);
 const store = {get(k){try{return localStorage.getItem(k)}catch(e){return store.m[k]||null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){store.m[k]=v}},m:{}};
 let key = store.get('jarvis-key');
