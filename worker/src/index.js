@@ -109,6 +109,12 @@ export default {
           spotifyAyarli: !!(env.SPOTIFY_CLIENT_ID && env.SPOTIFY_CLIENT_SECRET),
           spotifySecretBicim: /^[0-9a-f]{32}$/i.test(String(env.SPOTIFY_CLIENT_SECRET || "").trim()),
         });
+      if (path === "/gecmis" && req.method === "GET") {
+        const list = await env.KV.list({ prefix: "hist:" });
+        const out = {};
+        for (const k of list.keys) out[k.name] = JSON.parse((await env.KV.get(k.name)) || "[]");
+        return json(out);
+      }
       if (path === "/baglan/google" && req.method === "POST") return startOAuth(req, env, "google");
       if (path === "/baglan/spotify" && req.method === "POST") return startOAuth(req, env, "spotify");
       if (path === "/brifing" && req.method === "POST") return json({ gonderildi: true, metin: await sendBriefing(env) });
