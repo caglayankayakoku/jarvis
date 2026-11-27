@@ -2,17 +2,25 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { TOOL_DEFS, runTool, getMemory } from "./tools.js";
 
-const SYSTEM = `Sen Çağlayan'ın kişisel asistanı Jarvis'sin. Her zaman Türkçe, kısa ve samimi cevap ver. Kullanıcı aksini söylemezse İstanbul'da yaşıyor.
+const SYSTEM = `Sen Jarvis'sin: Çağlayan'ın kişisel asistanı. Bilgili, güvenilir ve pratik bir uzman gibi cevap verirsin. Her zaman Türkçe konuşursun. Kullanıcı aksini söylemezse İstanbul'da yaşıyor.
 
-Araçların: hava durumu, internette arama (web_search), haberler, döviz ve altın, Vikipedi, Google Takvim (oku/ekle/güncelle/sil; hatırlatıcılar da takvime eklenir), Gmail (ara/oku/gönder), not defteri (ekle/oku/sil), kalıcı hafıza (kullanıcı hakkında bilgiler), namaz vakitleri, son depremler, zamanlayıcı, harita (yer arama, neredeyim, yakındaki eczane/benzinlik vb., yol süresi, Google Haritalar'ı açma) ve Spotify (çal, durdur, devam, sonraki, önceki, ses, şu an çalan).
+Cevaplama ilkelerin:
+- Önce doğrudan cevabı ver, sonra gerekirse en fazla bir-iki cümle açıklama ekle. Sayı, saat, fiyat, isim gibi somut bilgiyi net söyle.
+- Güncel olabilecek her şeyi (fiyatlar, kurlar, maç sonuçları, haberler, açılış saatleri, yasalar, kampanyalar, ürün bilgileri, kişiler hakkında son durum) bilgine güvenmeden araçla kontrol et. Uygun özel araç varsa onu, yoksa web_search kullan. Bir sayfanın detayı gerekiyorsa web_fetch ile aç.
+- Genel bilgi, tarif, hesap, çeviri, birim dönüşümü, tavsiye, açıklama gibi konularda araç kullanmadan kendi bilginle hemen cevap ver. Hesapları dikkatlice yap.
+- Kaynaklar çelişirse veya emin değilsen bunu tek cümleyle söyle; asla bilgi uydurma. Bilmediğin şeyi "bilmiyorum, istersen araştırayım" diye söyle.
+- Sağlık, hukuk ve para konularında genel bilgi ver, gerektiğinde uzmana danışmasını öner. Yatırım tavsiyesi verme ama fiyat ve veri sun.
+- Belirsiz isteklerde en olası anlamı seç ve işi yap; gerçekten gerekmedikçe soru sorma.
 - 'Bugün', 'yarın' gibi ifadeleri mesajdaki tarihe göre kendin ISO formatına çevir (+03:00); kullanıcıya tarih sorma.
-- Bir istek araçlarla yapılabiliyorsa hemen aracı kullan, gereksiz soru sorma. Araç sonucundan emin değilsen uydurma.
-- Mail göndermeden önce alıcıyı, konuyu ve metni kısaca okuyup açık onay ('evet', 'gönder') al; onay yoksa gönderme. Alıcı adresini tahmin etme, gerekirse sor veya mail_ara ile bul.
-- Bir araç 'henüz bağlanmadı' derse bunu kısaca söyle.
+- Kalıcı hafızadaki bilgileri cevaplarını kişiselleştirmek için kullan. Kullanıcı kendisiyle ilgili kalıcı bir bilgi paylaşırsa hafiza_kaydet ile kaydet.
+- Mail göndermeden önce alıcıyı, konuyu ve metni kısaca okuyup açık onay ('evet', 'gönder') al; onay yoksa gönderme. Alıcı adresini tahmin etme, gerekirse sor veya mail_ara ile bul. Takvimden silmeden önce de onay al.
+- Bir araç 'henüz bağlanmadı' derse bunu kısaca söyle. Bir araç hata verirse başka bir yolla (ör. web_search) dene.
 - Konuşma geçmişinde önceki araç sonuçları görünmez; bu normaldir. Önceki cevaplarını düzeltmeye, doğrulamaya veya özür dilemeye çalışma, sadece yeni soruyu cevapla. Takvim veya mail gibi güncel bilgiler için her seferinde aracı yeniden çağır.
 - Mesajda kullanıcının konumu varsa 'yakınımda', 'buraya', 'neredeyim', hava durumu gibi isteklerde onu kullan; koordinatı kullanıcıya okuma. Konum yoksa ve gerekiyorsa uygulamada konum iznini açmasını söyle.
 
-Cevapların sesli okunacak: kısa ve doğal konuş; madde işareti, emoji, link ve markdown kullanma. Haber ve arama sonuçlarını 2-4 cümlede özetle.`;
+Araçların: hava durumu, internette arama ve sayfa okuma, haberler, döviz ve altın, kripto para, Borsa İstanbul ve yabancı hisse fiyatları, TDK sözlük, Vikipedi, Google Takvim (oku/ekle/güncelle/sil; hatırlatıcılar da takvime eklenir), Gmail (ara/oku/gönder), not defteri, kalıcı hafıza, namaz vakitleri, son depremler, zamanlayıcı, harita (yer arama, neredeyim, yakındaki yerler, yol süresi, Google Haritalar'ı açma) ve Spotify.
+
+Cevapların sesli okunacak: doğal, akıcı ve kısa konuş (genelde 1-4 cümle; kullanıcı ayrıntı isterse uzat). Madde işareti, emoji, link, tablo ve markdown kullanma. Sayıları okunaklı yaz (ör. 1.250 lira, saat 14.30). Haber ve arama sonuçlarını 2-4 cümlede özetle.`;
 
 function nowIstanbul() {
   return new Intl.DateTimeFormat("tr-TR", {
@@ -26,7 +34,8 @@ function nowIstanbul() {
   }).format(new Date());
 }
 
-const WEB_SEARCH = { type: "web_search_20250305", name: "web_search", max_uses: 3, user_location: { type: "approximate", city: "Istanbul", country: "TR", timezone: "Europe/Istanbul" } };
+const WEB_SEARCH = { type: "web_search_20250305", name: "web_search", max_uses: 5, user_location: { type: "approximate", city: "Istanbul", country: "TR", timezone: "Europe/Istanbul" } };
+const WEB_FETCH = { type: "web_fetch_20250910", name: "web_fetch", max_uses: 3, max_content_tokens: 8000 };
 
 export async function runAgent(env, history, userText, { maxTurns = 8, konum = null } = {}) {
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
@@ -34,7 +43,7 @@ export async function runAgent(env, history, userText, { maxTurns = 8, konum = n
     ...history,
     { role: "user", content: `[Şu an: ${nowIstanbul()} İstanbul saati]${konum ? `\n[Kullanıcının şu anki konumu: enlem ${konum.lat}, boylam ${konum.lon}]` : ""}\n${userText}` },
   ];
-  let tools = [...TOOL_DEFS, WEB_SEARCH];
+  let tools = [...TOOL_DEFS, WEB_SEARCH, WEB_FETCH];
   const ctx = { actions: [] };
   const memory = await getMemory(env).catch(() => []);
   const system = [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }];
@@ -48,14 +57,20 @@ export async function runAgent(env, history, userText, { maxTurns = 8, konum = n
         model: env.MODEL || "claude-haiku-5-5",
         max_tokens: 4096,
         system,
-        output_config: { effort: "low" },
+        output_config: { effort: env.EFFORT || "medium" },
         tools,
         messages,
       });
     } catch (e) {
       // Model sunucu taraflı web aramasını desteklemiyorsa onsuz devam et.
+      // Model bir sunucu aracını desteklemiyorsa o araç olmadan devam et.
+      if (e instanceof Anthropic.BadRequestError && tools.includes(WEB_FETCH) && /web_fetch/i.test(e.message)) {
+        tools = tools.filter((t) => t !== WEB_FETCH);
+        turn--;
+        continue;
+      }
       if (e instanceof Anthropic.BadRequestError && tools.includes(WEB_SEARCH) && /web_search/i.test(e.message)) {
-        tools = TOOL_DEFS;
+        tools = tools.filter((t) => t !== WEB_SEARCH);
         turn--;
         continue;
       }

@@ -22,6 +22,21 @@ export const TOOL_DEFS = [
     input_schema: obj({}),
   },
   {
+    name: "kripto",
+    description: "Kripto paraların (bitcoin, ethereum, solana, usdt vb.) güncel TL ve dolar fiyatını ve 24 saatlik değişimini getirir.",
+    input_schema: obj({ coinler: { type: "array", items: { type: "string" }, description: "Coin adları veya sembolleri" } }, ["coinler"]),
+  },
+  {
+    name: "hisse",
+    description: "Hisse senedi veya endeks fiyatını getirir. Borsa İstanbul için sembolün sonuna .IS ekle (THYAO.IS, ASELS.IS, XU100.IS). Yabancı hisseler için düz sembol (AAPL, TSLA).",
+    input_schema: obj({ semboller: { type: "array", items: { type: "string" } } }, ["semboller"]),
+  },
+  {
+    name: "sozluk",
+    description: "TDK Güncel Türkçe Sözlük'ten bir kelimenin anlamlarını ve örnek kullanımını getirir.",
+    input_schema: obj({ kelime: { type: "string" } }, ["kelime"]),
+  },
+  {
     name: "wikipedia",
     description: "Türkçe Vikipedi'de bir konunun özetini getirir.",
     input_schema: obj({ konu: { type: "string" } }, ["konu"]),
@@ -215,6 +230,54 @@ async function fx() {
   return Object.fromEntries(keys.filter((k) => k in j).map((k) => [k, j[k]]));
 }
 
+async function crypto({ coinler = [] }) {
+  const ids = await Promise.all(
+    coinler.slice(0, 6).map(async (c) => {
+      const s = await getJson("https://api.coingecko.com/api/v3/search?query=" + encodeURIComponent(c));
+      return s.coins?.[0]?.id;
+    })
+  );
+  const list = [...new Set(ids.filter(Boolean))];
+  if (!list.length) return { sonuc: "Coin bulunamadı" };
+  const p = new URLSearchParams({ ids: list.join(","), vs_currencies: "try,usd", include_24hr_change: "true" });
+  const j = await getJson("https://api.coingecko.com/api/v3/simple/price?" + p);
+  return Object.entries(j).map(([id, v]) => ({ coin: id, tl: v.try, dolar: v.usd, degisim_24s_yuzde: v.usd_24h_change && +v.usd_24h_change.toFixed(2) }));
+}
+
+async function stocks({ semboller = [] }) {
+  return Promise.all(
+    semboller.slice(0, 6).map(async (sym) => {
+      try {
+        const j = await getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1d`);
+        const m = j.chart?.result?.[0]?.meta;
+        if (!m) return { sembol: sym, hata: "Bulunamadı" };
+        const prev = m.chartPreviousClose ?? m.previousClose;
+        return {
+          sembol: sym,
+          ad: m.longName || m.shortName,
+          fiyat: m.regularMarketPrice,
+          para_birimi: m.currency,
+          onceki_kapanis: prev,
+          degisim_yuzde: prev ? +(((m.regularMarketPrice - prev) / prev) * 100).toFixed(2) : undefined,
+          zaman: m.regularMarketTime ? new Date(m.regularMarketTime * 1000).toISOString() : undefined,
+        };
+      } catch (e) {
+        return { sembol: sym, hata: "Fiyat alınamadı, web_search ile dene" };
+      }
+    })
+  );
+}
+
+async function tdk({ kelime }) {
+  const j = await getJson("https://sozluk.gov.tr/gts?ara=" + encodeURIComponent(kelime));
+  if (!Array.isArray(j)) return { sonuc: "Sözlükte bulunamadı" };
+  return j.slice(0, 2).map((m) => ({
+    madde: m.madde,
+    koken: m.lisan || undefined,
+    anlamlar: (m.anlamlarListe || []).slice(0, 5).map((a) => ({ anlam: a.anlam, ornek: a.orneklerListe?.[0]?.ornek })),
+  }));
+}
+
 async function wiki({ konu }) {
   const s = await getJson(
     "https://tr.wikipedia.org/w/api.php?" +
@@ -280,6 +343,12 @@ export async function runTool(env, name, input, ctx = { actions: [] }) {
       return fx();
     case "wikipedia":
       return wiki(input);
+    case "kripto":
+      return crypto(input);
+    case "hisse":
+      return stocks(input);
+    case "sozluk":
+      return tdk(input);
     case "takvim_oku":
       return calendarList(env, input.baslangic, input.bitis);
     case "takvim_ekle":
