@@ -13,7 +13,7 @@ binding = "KV"
 crons = ["0 5 * * *"]
 
 [vars]
-MODEL = "claude-opus-5-5"
+MODEL = "claude-sonnet-5-5"
 APP_ORIGIN = "https://caglayankayakoku.github.io"
 GOOGLE_CLIENT_ID = "249973334196-k2p2vdb4kucb7kff2jhcg1if6c2pen3q.apps.googleusercontent.com"
 SPOTIFY_CLIENT_ID = "731881fbab874b0bb264a1943e1e98a2"
