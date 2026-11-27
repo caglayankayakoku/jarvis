@@ -143,7 +143,7 @@ async function ask(text){
     const j=await r.json().catch(()=>({}));
     const out=(r.ok&&(Array.isArray(j)?j[0]:j)?.output)||'Beynim şu an yanıt veremedi, birazdan tekrar dener misin?';
     add(out);speak(out);
-    for(const a of (j&&j.actions)||[]){if(a.tur==='zamanlayici')setTimer(a.saniye,a.etiket);if(a.tur==='harita')openMap(a.url)}
+    for(const a of (j&&j.actions)||[]){if(a.tur==='zamanlayici')setTimer(a.saniye,a.etiket);if(a.tur==='harita')openMap(a.url);if(a.tur==='spotify')openSpotify(a.uri,a.link)}
   }catch(e){const m=e.name==='AbortError'?'Beynim şu an çok yoğun, cevap gecikti. Birazdan tekrar sorar mısın?':'Bağlantı kurulamadı. İnternetini kontrol et.';add(m);speak(m)}
 }
 // location (asks permission once; cached 2 min)
@@ -161,6 +161,17 @@ function openMap(url){
   const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.textContent='🗺 Google Haritalar\'da aç';a.style.cssText='display:inline-block;margin-top:4px;padding:8px 14px;border:1px solid currentColor;border-radius:10px;color:inherit;text-decoration:none';
   m.append(s,a);$('log').append(m);$('log').scrollTop=1e9;
   const w=window.open(url,'_blank');if(!w){/* popup blocked: user taps the button */}
+}
+// spotify: open the app, then start playback once it shows up as a device
+function openSpotify(uri,link){
+  const go=uri||'spotify:';
+  const m=document.createElement('div');m.className='msg';const sm=document.createElement('small');sm.textContent='SPOTIFY';
+  const a=document.createElement('a');a.href=go;a.textContent='🎵 Spotify\'ı aç';a.style.cssText='display:inline-block;margin-top:4px;padding:8px 14px;border:1px solid currentColor;border-radius:10px;color:inherit;text-decoration:none';
+  m.append(sm,a);$('log').append(m);$('log').scrollTop=1e9;
+  setTimeout(()=>{try{location.href=go}catch(e){if(link)window.open(link,'_blank')}},1500);
+  let n=0;const API2=API.replace(/\/chat$/,'/spotify/cal');
+  const tryPlay=async()=>{n++;try{const r=await fetch(API2,{method:'POST',headers:{'Content-Type':'application/json','X-Jarvis-Key':key},body:JSON.stringify({uri})});const j=await r.json();if(j.caliyor)return}catch(e){}if(n<6)setTimeout(tryPlay,3000)};
+  setTimeout(tryPlay,5000);
 }
 // timers
 let actx=null;

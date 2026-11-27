@@ -165,7 +165,7 @@ export const TOOL_DEFS = [
   },
   {
     name: "muzik_cal",
-    description: "Spotify'da şarkı, sanatçı, albüm veya çalma listesi arayıp çalar.",
+    description: "Spotify'da şarkı, sanatçı, albüm veya çalma listesi arayıp çalar. Spotify kapalıysa telefonda otomatik açılır; 'Spotify'ı aç' isteğinde de bunu kullan.",
     input_schema: obj(
       { sorgu: { type: "string" }, tur: { type: "string", enum: ["track", "artist", "album", "playlist"] } },
       ["sorgu", "tur"]
@@ -410,9 +410,9 @@ export async function runTool(env, name, input, ctx = { actions: [] }) {
       return silinen ? { silindi: silinen.metin } : { hata: "Bu sırada not yok" };
     }
     case "muzik_cal":
-      return spotifyPlay(env, input.sorgu, input.tur);
+      return spotifyPlay(env, input.sorgu, input.tur, ctx);
     case "muzik_kontrol":
-      return spotifyControl(env, input.eylem, input.ses);
+      return spotifyControl(env, input.eylem, input.ses, ctx);
     case "simdi_calan":
       return spotifyNowPlaying(env);
     default:

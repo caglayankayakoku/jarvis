@@ -5,7 +5,7 @@
 //   cron 05:00 UTC      Sabah brifingi (08:00 İstanbul)
 import { runAgent } from "./agent.js";
 import { googleAuthUrl, googleExchangeCode, gmailMyAddress, gmailSend } from "./google.js";
-import { spotifyAuthUrl, spotifyExchangeCode } from "./spotify.js";
+import { spotifyAuthUrl, spotifyExchangeCode, spotifyPlayUri } from "./spotify.js";
 import { setupPage, resultPage, privacyPage } from "./pages.js";
 
 const CORS = {
@@ -109,6 +109,14 @@ export default {
           spotifyAyarli: !!(env.SPOTIFY_CLIENT_ID && env.SPOTIFY_CLIENT_SECRET),
           spotifySecretBicim: /^[0-9a-f]{32}$/i.test(String(env.SPOTIFY_CLIENT_SECRET || "").trim()),
         });
+      if (path === "/spotify/cal" && req.method === "POST") {
+        const b = await req.json().catch(() => ({}));
+        try {
+          return json(await spotifyPlayUri(env, String(b.uri || "")));
+        } catch (e) {
+          return json({ caliyor: false, hata: String(e.message || e) });
+        }
+      }
       if (path === "/gecmis" && req.method === "GET") {
         const list = await env.KV.list({ prefix: "hist:" });
         const out = {};

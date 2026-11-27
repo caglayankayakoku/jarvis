@@ -70,24 +70,44 @@ async function withDevice(env, fn) {
     if (!e.noDevice) throw e;
     const d = await sapi(env, "/me/player/devices");
     const dev = (d.devices || [])[0];
-    if (!dev) throw new Error("Açık bir Spotify cihazı yok. Telefonda veya bilgisayarda Spotify uygulamasını aç.");
+    if (!dev) {
+      const err = new Error("Açık bir Spotify cihazı yok.");
+      err.noDevice = true;
+      err.none = true;
+      throw err;
+    }
     await sapi(env, "/me/player", { method: "PUT", body: JSON.stringify({ device_ids: [dev.id], play: false }) });
     return await fn();
   }
 }
 
-export async function spotifyPlay(env, sorgu, tur = "track") {
+// Uygulama Spotify'ı açtıktan sonra çağırır: aktif cihaza aktarıp çalar.
+export async function spotifyPlayUri(env, uri) {
+  const body = uri && uri.startsWith("spotify:track:") ? { uris: [uri] } : uri ? { context_uri: uri } : undefined;
+  await withDevice(env, () => sapi(env, "/me/player/play", { method: "PUT", body: body ? JSON.stringify(body) : undefined }));
+  return { caliyor: true };
+}
+
+export async function spotifyPlay(env, sorgu, tur = "track", ctx = { actions: [] }) {
   const type = ["track", "playlist", "artist", "album"].includes(tur) ? tur : "track";
   const s = await sapi(env, `/search?${new URLSearchParams({ q: sorgu, type, limit: "1", market: "TR" })}`);
   const item = s[type + "s"]?.items?.find(Boolean);
   if (!item) return { bulunamadi: true, sorgu };
   const body = type === "track" ? { uris: [item.uri] } : { context_uri: item.uri };
-  await withDevice(env, () => sapi(env, "/me/player/play", { method: "PUT", body: JSON.stringify(body) }));
+  const kim0 = item.artists?.map((a) => a.name).join(", ") || item.owner?.display_name || "";
+  try {
+    await withDevice(env, () => sapi(env, "/me/player/play", { method: "PUT", body: JSON.stringify(body) }));
+  } catch (e) {
+    if (!e.none) throw e;
+    // Açık cihaz yok: telefondaki uygulama Spotify'ı açacak, sonra çalmayı başlatacak.
+    ctx.actions.push({ tur: "spotify", uri: item.uri, link: item.external_urls?.spotify });
+    return { caliyor: item.name, sanatci: kim0, not: "Spotify telefonda açılıyor, şarkı birkaç saniye içinde başlayacak." };
+  }
   const kim = item.artists?.map((a) => a.name).join(", ") || item.owner?.display_name || "";
   return { caliyor: item.name, sanatci: kim, tur: type };
 }
 
-export async function spotifyControl(env, eylem, ses) {
+export async function spotifyControl(env, eylem, ses, ctx = { actions: [] }) {
   const map = {
     durdur: ["PUT", "/me/player/pause"],
     devam: ["PUT", "/me/player/play"],
@@ -101,7 +121,14 @@ export async function spotifyControl(env, eylem, ses) {
   }
   const m = map[eylem];
   if (!m) return { hata: "Bilinmeyen eylem" };
-  await withDevice(env, () => sapi(env, m[1], { method: m[0] }));
+  try {
+    await withDevice(env, () => sapi(env, m[1], { method: m[0] }));
+  } catch (e) {
+    if (!e.none) throw e;
+    if (eylem === "durdur") return { tamam: true, not: "Zaten çalan bir şey yok." };
+    ctx.actions.push({ tur: "spotify", uri: "", link: "https://open.spotify.com" });
+    return { not: "Spotify telefonda açılıyor, birkaç saniye içinde devam edecek." };
+  }
   return { tamam: true, eylem };
 }
 
